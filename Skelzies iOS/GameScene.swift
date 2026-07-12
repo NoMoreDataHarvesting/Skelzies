@@ -12,6 +12,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
 
     // Aiming
     private var aimTouch: UITouch?
+    private var aimAnchor = CGPoint.zero   // where the pull began (not the cap)
     private var aimDir = CGVector(dx: 0, dy: 1)
     private var dragValid = false
     private var aimStartTime: TimeInterval = 0
@@ -201,9 +202,11 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard turnState == .aiming, aimTouch == nil,
-              let touch = touches.first, let cap = caps[activeID] else { return }
-        let p = touch.location(in: self)
-        guard hypot(p.x - cap.position.x, p.y - cap.position.y) < Layout.capRadius * 3.4 else { return }
+              let touch = touches.first, caps[activeID] != nil else { return }
+        // Anchor the pull wherever the finger lands. Edge-pinned caps stay
+        // shootable because the pull-back room comes from the anchor point,
+        // not from the space behind the cap.
+        aimAnchor = touch.location(in: self)
         aimTouch = touch
         aimStartTime = sceneTime
         dragValid = false
@@ -215,10 +218,10 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard let touch = aimTouch, touches.contains(touch), let cap = caps[activeID] else { return }
+        guard let touch = aimTouch, touches.contains(touch) else { return }
         let p = touch.location(in: self)
-        let dx = cap.position.x - p.x
-        let dy = cap.position.y - p.y
+        let dx = aimAnchor.x - p.x
+        let dy = aimAnchor.y - p.y
         let len = hypot(dx, dy)
         if len > 30 * u {   // deliberate pull — phantom-touch protection
             aimDir = CGVector(dx: dx / len, dy: dy / len)
@@ -231,13 +234,13 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         let releasePoint = touch.location(in: self)
         aimTouch = nil
         hideAim()
-        guard dragValid, turnState == .aiming, let cap = caps[activeID] else { return }
+        guard dragValid, turnState == .aiming else { return }
         // Phantom-release protection: a real flick takes time to line up —
         // a sub-0.2s touch is a graze or capacitive dropout, not a shot.
         guard sceneTime - aimStartTime >= 0.2 else { return }
-        // Releasing back on top of the cap is a deliberate cancel.
-        let returnDist = hypot(releasePoint.x - cap.position.x, releasePoint.y - cap.position.y)
-        guard returnDist > Layout.capRadius * 3.4 else { return }
+        // Returning the finger to where the pull began is a deliberate cancel.
+        let pullDist = hypot(releasePoint.x - aimAnchor.x, releasePoint.y - aimAnchor.y)
+        guard pullDist > 30 * u else { return }
         shoot()
     }
 
