@@ -13,6 +13,7 @@ struct Player: Identifiable, Equatable {
     let id: Int                 // equals its index in the players array
     var name: String
     var colorIndex: Int
+    var weight: CapWeight = .welterweight
     var status: PlayerStatus = .chasing(target: 1)
     var hitsTaken: Int = 0
 
@@ -64,4 +65,84 @@ extension UIColor {
                   blue: CGFloat(rgb & 0xFF) / 255,
                   alpha: 1)
     }
+}
+
+// MARK: - Cap weight classes ("character select")
+
+enum CapWeight: String, CaseIterable, Identifiable {
+    case lightweight, welterweight, heavyweight
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .lightweight:  return "Lightweight"
+        case .welterweight: return "Welterweight"
+        case .heavyweight:  return "Heavyweight"
+        }
+    }
+
+    var nickname: String {
+        switch self {
+        case .lightweight:  return "The Flick"
+        case .welterweight: return "The Classic"
+        case .heavyweight:  return "The Quarter"
+        }
+    }
+
+    var emoji: String {
+        switch self {
+        case .lightweight:  return "🪶"
+        case .welterweight: return "🕯"
+        case .heavyweight:  return "🪙"
+        }
+    }
+
+    var flavor: String {
+        switch self {
+        case .lightweight:  return "Empty cap — flies far, gets smacked around."
+        case .welterweight: return "Wax-filled — the balanced standard."
+        case .heavyweight:  return "Quarter-loaded — short slides, barely flinches."
+        }
+    }
+
+    /// Physics mass: recoil dynamics come free from momentum exchange.
+    var mass: CGFloat {
+        switch self {
+        case .lightweight:  return 0.7
+        case .welterweight: return 1.0
+        case .heavyweight:  return 1.5
+        }
+    }
+
+    /// Multiplier on launch speed — heavy caps travel less per unit of power.
+    var powerFactor: CGFloat {
+        switch self {
+        case .lightweight:  return 1.15
+        case .welterweight: return 1.0
+        case .heavyweight:  return 0.85
+        }
+    }
+
+    var rangePips: Int {
+        switch self {
+        case .lightweight:  return 5
+        case .welterweight: return 3
+        case .heavyweight:  return 2
+        }
+    }
+
+    var stabilityPips: Int {
+        switch self {
+        case .lightweight:  return 2
+        case .welterweight: return 3
+        case .heavyweight:  return 5
+        }
+    }
+}
+
+/// One row from the setup screen.
+struct PlayerEntry {
+    let name: String
+    let weight: CapWeight
 }
