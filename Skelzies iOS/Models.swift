@@ -146,3 +146,33 @@ struct PlayerEntry {
     let name: String
     let weight: CapWeight
 }
+
+// MARK: - Game modes
+
+enum GameMode: String, CaseIterable, Identifiable {
+    case traditional   // "Skelzies" — land box 13 squarely and win on the spot
+    case knockout      // "Knock Out" — clear 13, turn Killer, last cap standing
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .traditional: return "SKELZIES"
+        case .knockout:    return "KNOCK OUT"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .traditional: return "Traditional"
+        case .knockout:    return "Elimination"
+        }
+    }
+
+    var blurb: String {
+        switch self {
+        case .traditional: return "Race the board — first to land box 13 wins."
+        case .knockout:    return "Clear 13, turn Killer, hunt caps. Last one standing."
+        }
+    }
+}

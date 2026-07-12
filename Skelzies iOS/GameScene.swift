@@ -28,14 +28,16 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     private let aimHead = SKShapeNode()
     private let powerRing = SKShapeNode()
 
-    // Tuning
+    // Tuning — base values are the V2 feel; scaled by the board unit (u) so
+    // the bigger V3 board plays identically.
     private let pulsePeriod: TimeInterval = 2.4    // breathing pace — slower = easier to time
-    private let minSpeed: CGFloat = 90             // true tap shots for positional play
-    private let maxSpeed: CGFloat = 1250
+    private var u: CGFloat { Layout.unit }
+    private var minSpeed: CGFloat { 90 * u }       // true tap shots for positional play
+    private var maxSpeed: CGFloat { 1250 * u }
     private let maxWander: CGFloat = 0.14          // ~8° of drift at full power
     private let powerEasing: CGFloat = 1.4         // stretches the low-power band across more time
-    private let rollingFriction: CGFloat = 55      // pts/s² constant decel — asphalt grip
-    private let stopSpeed: CGFloat = 12            // caps grab instead of creeping
+    private var rollingFriction: CGFloat { 55 * u } // pts/s² constant decel — asphalt grip
+    private var stopSpeed: CGFloat { 12 * u }      // caps grab instead of creeping
 
     // Ghost caps: players who haven't taken their first shot yet
     private var ghosts: Set<Int> = []
@@ -51,6 +53,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
 
     override func didMove(to view: SKView) {
         backgroundColor = UIColor(rgb: 0x1D1E22)
+        view.isMultipleTouchEnabled = false   // stray second touches can't steal or end the aim
         physicsWorld.gravity = .zero
         physicsWorld.contactDelegate = self
 
@@ -80,7 +83,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         for player in vm.players {
             let node = SKSpriteNode(texture: ChalkRenderer.capTexture(colorIndex: player.colorIndex,
                                                                       weight: player.weight))
-            node.size = CGSize(width: 34, height: 34)
+            node.size = CGSize(width: Layout.capRadius * 2 + 4, height: Layout.capRadius * 2 + 4)
             node.position = Layout.startScenePosition(slot: player.id)
             node.zPosition = 10
 
@@ -160,8 +163,8 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         guard let cap = caps[id], cap.childNode(withName: "crown") == nil else { return }
         let crown = SKLabelNode(text: "👑")
         crown.name = "crown"
-        crown.fontSize = 15
-        crown.position = CGPoint(x: 0, y: 19)
+        crown.fontSize = 17
+        crown.position = CGPoint(x: 0, y: Layout.capRadius + 5)
         crown.zPosition = 1
         cap.addChild(crown)
     }
@@ -180,7 +183,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     func resetCapToStart(id: Int) {
         guard let cap = caps[id] else { return }
         cap.physicsBody?.velocity = .zero
-        for slot in 0..<8 {
+        for slot in 0..<Layout.startOffsets.count {
             let p = Layout.startScenePosition(slot: slot)
             let clear = caps.allSatisfy { pid, other in
                 pid == id || hypot(other.position.x - p.x, other.position.y - p.y) > Layout.capRadius * 2.4
@@ -217,7 +220,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         let dx = cap.position.x - p.x
         let dy = cap.position.y - p.y
         let len = hypot(dx, dy)
-        if len > 14 {
+        if len > 30 * u {   // deliberate pull — phantom-touch protection
             aimDir = CGVector(dx: dx / len, dy: dy / len)
             dragValid = true
         }
@@ -225,9 +228,16 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let touch = aimTouch, touches.contains(touch) else { return }
+        let releasePoint = touch.location(in: self)
         aimTouch = nil
         hideAim()
-        guard dragValid, turnState == .aiming else { return }
+        guard dragValid, turnState == .aiming, let cap = caps[activeID] else { return }
+        // Phantom-release protection: a real flick takes time to line up —
+        // a sub-0.2s touch is a graze or capacitive dropout, not a shot.
+        guard sceneTime - aimStartTime >= 0.2 else { return }
+        // Releasing back on top of the cap is a deliberate cancel.
+        let returnDist = hypot(releasePoint.x - cap.position.x, releasePoint.y - cap.position.y)
+        guard returnDist > Layout.capRadius * 3.4 else { return }
         shoot()
     }
 
@@ -263,7 +273,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         let p = pulse
         let dir = wanderedDirection(p)
         let startR = Layout.capRadius + 8
-        let len = 40 + p * 175
+        let len = (40 + p * 175) * u
         let sx = cap.position.x + dir.dx * startR
         let sy = cap.position.y + dir.dy * startR
         let ex = cap.position.x + dir.dx * (startR + len)
@@ -353,8 +363,11 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
                 : CGVector(dx: v.dx * slowed / speed, dy: v.dy * slowed / speed)
         }
 
-        // Pavement limit: past this, the cap flew off the block — back to Start.
-        let world = CGRect(origin: .zero, size: size).insetBy(dx: -70, dy: -70)
+        // Off the screen = off the block. No slack margin: a cap whose center
+        // leaves the visible scene resets to Start immediately. (Fixes the V2
+        // bug where a cap could rest invisibly in the 70pt off-scene tolerance
+        // and soft-lock the game.)
+        let world = CGRect(origin: .zero, size: size)
         for (pid, node) in caps where !world.contains(node.position) {
             if pid == activeID { offWorldShooter = true }
             resetCapToStart(id: pid)
@@ -378,6 +391,11 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         turnState = .idle
         for node in caps.values { node.physicsBody?.velocity = .zero }
         guard let vm, let cap = caps[activeID] else { return }
+        // Safety net: never resolve a turn with an off-screen shooter.
+        if !CGRect(origin: .zero, size: size).contains(cap.position) {
+            offWorldShooter = true
+            resetCapToStart(id: activeID)
+        }
         let report = GeometryJudge.judge(scenePosition: cap.position,
                                          victims: Array(victims),
                                          offWorld: offWorldShooter,

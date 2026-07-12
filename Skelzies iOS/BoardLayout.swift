@@ -9,37 +9,73 @@ struct NumBox {
     let rotation: CGFloat
 }
 
-/// All geometry lives in "image coordinates" (origin top-left, y down),
-/// which makes CoreGraphics rendering direct. `toScene` flips into
-/// SpriteKit coordinates (origin bottom-left, y up).
+/// Board geometry, configured once per game via `configure(sceneSize:)` so the
+/// scene can match the display's aspect exactly (zero letterbox bars) and the
+/// board can scale to dominate the screen. All geometry lives in "image
+/// coordinates" (origin top-left, y down); `toScene` flips into SpriteKit
+/// coordinates (origin bottom-left, y up).
 enum Layout {
-    static let sceneSize = CGSize(width: 1200, height: 900)
 
-    /// The chalk square. The pavement around it is in-play (no walls).
-    static let boardRect = CGRect(x: 280, y: 130, width: 660, height: 660)
+    // MARK: - Configured state (call configure(sceneSize:) before scene creation)
 
-    static let capRadius: CGFloat = 15
-    static let lineHalf: CGFloat = 2.2      // half-thickness of a chalk line
+    private(set) static var sceneSize = CGSize(width: 1333, height: 1000)
+    private(set) static var boardRect = CGRect.zero
+    private(set) static var unit: CGFloat = 1          // scale factor vs the V2 660pt board
+    private(set) static var capRadius: CGFloat = 15
+    private(set) static var lineHalf: CGFloat = 2.8    // half-thickness of the fatter V3 chalk
+    private(set) static var box13Rect = CGRect.zero
+    private(set) static var deadFrameRect = CGRect.zero
+    private(set) static var boxes: [NumBox] = []
+    private(set) static var segments: [(CGPoint, CGPoint)] = []
+    private(set) static var startImage = CGPoint.zero
+    private(set) static var startOffsets: [CGPoint] = []
 
-    static let cornerSize: CGFloat = 88
-    static let edgeSize: CGFloat = 64
+    /// The 12.23% hit-zone bonus applied to every numbered box (not the dead frame).
+    private static let boxBonus: CGFloat = 1.1223
 
-    /// "Start" cluster, outside the board's top-left corner (image coords).
-    static let startImage = CGPoint(x: 190, y: 115)
+    static func configure(sceneSize size: CGSize) {
+        sceneSize = size
+        let side = (size.height * 0.86).rounded()      // board dominance
+        unit = side / 660
+        capRadius = 15 * unit
+        boardRect = CGRect(x: ((size.width - side) / 2).rounded(),
+                           y: ((size.height - side) / 2).rounded(),
+                           width: side, height: side)
 
-    static let box13Rect: CGRect = centered(size: 96)
-    static let deadFrameRect: CGRect = centered(size: 208)
+        let corner = 88 * unit * boxBonus
+        let edge = 64 * unit * boxBonus
+        let center13 = 96 * unit * boxBonus
+        let frame = 208 * unit
+
+        box13Rect = centered(size: center13)
+        deadFrameRect = centered(size: frame)
+        boxes = buildBoxes(cornerSize: corner, edgeSize: edge)
+        segments = buildSegments()
+
+        // Start cluster sits on the pavement outside the board's top-left.
+        startImage = CGPoint(x: (boardRect.minX * 0.40).rounded(),
+                             y: (boardRect.minY + 20).rounded())
+        // 8 unique staggered slots (two loose columns) so repeated resets
+        // never stack caps on top of each other.
+        let raw: [CGPoint] = [
+            CGPoint(x: 0, y: 0),   CGPoint(x: 40, y: 22),
+            CGPoint(x: -2, y: 48), CGPoint(x: 42, y: 70),
+            CGPoint(x: 0, y: 96),  CGPoint(x: 44, y: 118),
+            CGPoint(x: 2, y: 144), CGPoint(x: 46, y: 166),
+        ]
+        startOffsets = raw.map { CGPoint(x: $0.x * unit, y: $0.y * unit) }
+    }
 
     private static func centered(size s: CGFloat) -> CGRect {
         CGRect(x: boardRect.midX - s / 2, y: boardRect.midY - s / 2, width: s, height: s)
     }
 
-    /// Layout per the reference photo:
-    /// corners 1 (TL), 4 (TR), 2 (BR), 3 (BL); paired edge boxes
-    /// 9|11 top, 5|7 left, 6|8 right, 12|10 bottom; 13 framed in the center.
-    static let boxes: [NumBox] = {
+    /// Layout per the reference photo: corners 1 (TL), 4 (TR), 2 (BR), 3 (BL);
+    /// paired edge boxes 9|11 top, 5|7 left, 6|8 right, 12|10 bottom; 13 framed
+    /// in the center. Digits face outward.
+    private static func buildBoxes(cornerSize C: CGFloat, edgeSize E: CGFloat) -> [NumBox] {
         let b = boardRect
-        let C = cornerSize, E = edgeSize, side = b.width
+        let side = b.width
         func r(_ x: CGFloat, _ y: CGFloat, _ s: CGFloat) -> CGRect {
             CGRect(x: b.minX + x, y: b.minY + y, width: s, height: s)
         }
@@ -64,10 +100,10 @@ enum Layout {
         // Center
         list.append(NumBox(n: 13, rect: box13Rect, rotation: 0))
         return list
-    }()
+    }
 
     /// Every chalk segment on the board — used for the "touched a line" ruling.
-    static let segments: [(CGPoint, CGPoint)] = {
+    private static func buildSegments() -> [(CGPoint, CGPoint)] {
         var segs: [(CGPoint, CGPoint)] = []
         func addRect(_ r: CGRect) {
             segs.append((CGPoint(x: r.minX, y: r.minY), CGPoint(x: r.maxX, y: r.minY)))
@@ -86,18 +122,12 @@ enum Layout {
         segs.append((CGPoint(x: f.maxX, y: f.maxY), CGPoint(x: t.maxX, y: t.maxY)))
         segs.append((CGPoint(x: f.minX, y: f.maxY), CGPoint(x: t.minX, y: t.maxY)))
         return segs
-    }()
+    }
 
-    // MARK: coordinate conversion
+    // MARK: - Coordinate conversion
 
     static func toScene(_ p: CGPoint) -> CGPoint { CGPoint(x: p.x, y: sceneSize.height - p.y) }
     static func toImage(_ p: CGPoint) -> CGPoint { CGPoint(x: p.x, y: sceneSize.height - p.y) }
-
-    /// Staggered spots around "Start" so 2–6 caps stack without overlapping.
-    static let startOffsets: [CGPoint] = [
-        CGPoint(x: 0, y: 0), CGPoint(x: 38, y: 18), CGPoint(x: -6, y: 40),
-        CGPoint(x: 34, y: 54), CGPoint(x: -38, y: 22), CGPoint(x: 70, y: 40),
-    ]
 
     static func startScenePosition(slot: Int) -> CGPoint {
         let base = toScene(startImage)
