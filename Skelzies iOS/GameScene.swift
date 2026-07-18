@@ -7,6 +7,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     private enum TurnState { case idle, aiming, rolling }
     private var turnState: TurnState = .idle
     private var activeID = 0
+    private var turnToken = 0          // invalidates stale CPU shot timers
 
     private var caps: [Int: SKSpriteNode] = [:]
 
@@ -33,6 +34,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     // the bigger V3 board plays identically.
     private let pulsePeriod: TimeInterval = 2.4    // breathing pace — slower = easier to time
     private var u: CGFloat { Layout.unit }
+    private let capDamping: CGFloat = 1.35         // exponential slide decay
     private var minSpeed: CGFloat { 90 * u }       // true tap shots for positional play
     private var maxSpeed: CGFloat { 1250 * u }
     private let maxWander: CGFloat = 0.14          // ~8° of drift at full power
@@ -89,7 +91,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             node.zPosition = 10
 
             let body = SKPhysicsBody(circleOfRadius: Layout.capRadius)
-            body.linearDamping = 1.35
+            body.linearDamping = capDamping
             body.angularDamping = 5
             body.restitution = 0.78
             body.friction = 0.2
@@ -123,6 +125,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
 
     func beginTurn(for id: Int) {
         activeID = id
+        turnToken += 1
         turnState = .aiming
         victims.removeAll()
         offWorldShooter = false
@@ -148,6 +151,8 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
                 node.run(.repeatForever(.sequence([up, down])), withKey: "breathe")
             }
         }
+
+        scheduleCPUShotIfNeeded(for: id)
     }
 
     func endInput() {
@@ -203,6 +208,8 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard turnState == .aiming, aimTouch == nil,
               let touch = touches.first, caps[activeID] != nil else { return }
+        // CPU turns ignore human input entirely.
+        if let vm, vm.players.indices.contains(activeID), vm.players[activeID].isCPU { return }
         // Anchor the pull wherever the finger lands. Edge-pinned caps stay
         // shootable because the pull-back room comes from the anchor point,
         // not from the space behind the cap.
@@ -308,14 +315,19 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private func shoot() {
-        guard let cap = caps[activeID], let body = cap.physicsBody else { return }
-        solidify(activeID)   // first shot makes the cap real
         let p = pulse
         let dir = wanderedDirection(p)
         let eased = pow(p, powerEasing)   // widens the shallow-shot band
         let weight = vm?.players[activeID].weight ?? .welterweight
         let speed = (minSpeed + eased * (maxSpeed - minSpeed)) * weight.powerFactor
-        body.velocity = CGVector(dx: dir.dx * speed, dy: dir.dy * speed)
+        launch(capID: activeID, direction: dir, speed: speed)
+    }
+
+    /// Shared launch path for human flicks and CPU shots.
+    private func launch(capID: Int, direction: CGVector, speed: CGFloat) {
+        guard let cap = caps[capID], let body = cap.physicsBody else { return }
+        solidify(capID)   // first shot makes the cap real
+        body.velocity = CGVector(dx: direction.dx * speed, dy: direction.dy * speed)
 
         cap.removeAction(forKey: "breathe")
         cap.setScale(1)
@@ -323,6 +335,92 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         turnState = .rolling
         rollStartTime = sceneTime
         settleFrames = 0
+    }
+
+    // MARK: - CPU opponents
+
+    private func scheduleCPUShotIfNeeded(for id: Int) {
+        guard let vm, vm.players.indices.contains(id),
+              case .cpu(let difficulty) = vm.players[id].control else { return }
+        let token = turnToken
+        DispatchQueue.main.asyncAfter(deadline: .now() + difficulty.thinkTime) { [weak self] in
+            guard let self, self.turnToken == token, self.turnState == .aiming else { return }
+            self.performCPUShot(playerID: id, difficulty: difficulty)
+        }
+    }
+
+    private func performCPUShot(playerID id: Int, difficulty: CPUDifficulty) {
+        guard let vm, vm.players.indices.contains(id), let cap = caps[id] else { return }
+        let me = vm.players[id]
+
+        // Pick a target point: next box while chasing, nearest rival cap as Killer.
+        let target: CGPoint
+        if me.isKiller {
+            let rivalCaps = vm.players
+                .filter { $0.id != id && !$0.isEliminated }
+                .compactMap { caps[$0.id] }
+            guard let prey = rivalCaps.min(by: {
+                hypot($0.position.x - cap.position.x, $0.position.y - cap.position.y) <
+                hypot($1.position.x - cap.position.x, $1.position.y - cap.position.y)
+            }) else { return }
+            target = prey.position
+        } else {
+            guard let t = me.target,
+                  let box = Layout.boxes.first(where: { $0.n == t }) else { return }
+            target = Layout.toScene(CGPoint(x: box.rect.midX, y: box.rect.midY))
+        }
+
+        var dx = target.x - cap.position.x
+        var dy = target.y - cap.position.y
+        let dist = hypot(dx, dy)
+        guard dist > 1 else { return }
+        dx /= dist
+        dy /= dist
+
+        // Search for the launch speed whose slide distance best matches.
+        // Killers add pace so the hit arrives with momentum.
+        let wanted = dist * (me.isKiller ? 1.15 : 1.0)
+        var best = minSpeed
+        var bestErr = CGFloat.greatestFiniteMagnitude
+        var v = minSpeed
+        while v <= maxSpeed {
+            let err = abs(travelDistance(atLaunchSpeed: v) - wanted)
+            if err < bestErr {
+                bestErr = err
+                best = v
+            }
+            v += 12 * u
+        }
+
+        // Difficulty: noise on power and angle, plus the occasional full flub.
+        var speed = best
+        var angle = atan2(dy, dx)
+        if Double.random(in: 0...1) < difficulty.flubChance {
+            speed = CGFloat.random(in: minSpeed...maxSpeed)
+            angle += CGFloat.random(in: -0.35...0.35)
+        } else {
+            speed *= 1 + CGFloat.random(in: -difficulty.powerNoise...difficulty.powerNoise)
+            angle += CGFloat.random(in: -difficulty.angleNoise...difficulty.angleNoise)
+        }
+        speed = min(max(speed, minSpeed * 0.6), maxSpeed) * me.weight.powerFactor
+
+        launch(capID: id,
+               direction: CGVector(dx: cos(angle), dy: sin(angle)),
+               speed: speed)
+    }
+
+    /// Numeric simulation of the damping + rolling-friction slide model.
+    private func travelDistance(atLaunchSpeed v0: CGFloat) -> CGFloat {
+        var v = v0
+        var distance: CGFloat = 0
+        var t: CGFloat = 0
+        let dt: CGFloat = 1.0 / 60.0
+        while v > stopSpeed && t < 10 {
+            distance += v * dt
+            v -= (capDamping * v + rollingFriction) * dt
+            t += dt
+        }
+        return distance
     }
 
     // MARK: - Contacts (killer hits)
