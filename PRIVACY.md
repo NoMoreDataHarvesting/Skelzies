@@ -1,13 +1,13 @@
-# Privacy Policy — Skelzies
+# Privacy Policy — Skelz
 
 **Effective date:** August 1, 2026
 **Last updated:** August 1, 2026
 
-Skelzies ("the App") is an offline iPad game that recreates the classic New York
+Skelz ("the App") is an offline iPad game that recreates the classic New York
 City street game of skelly. This policy explains what the App does — and does not
 — do with your information.
 
-The short version: **Skelzies collects nothing.**
+The short version: **Skelz collects nothing.**
 
 ---
 
@@ -15,7 +15,7 @@ The short version: **Skelzies collects nothing.**
 
 **None.**
 
-Skelzies does not collect, store, transmit, sell, or share any personal
+Skelz does not collect, store, transmit, sell, or share any personal
 information or usage data. Specifically, the App does **not**:
 
 - Require an account, sign-in, email address, or any registration
@@ -29,7 +29,7 @@ information or usage data. Specifically, the App does **not**:
 
 ## 2. Network Access
 
-Skelzies contains no networking code. The App makes no network requests, connects
+Skelz contains no networking code. The App makes no network requests, connects
 to no servers, and requires no internet connection. It works identically in
 Airplane Mode. There is no backend service associated with the App, because none
 is needed.
@@ -47,7 +47,7 @@ launches.
 
 ## 4. Third-Party Services and SDKs
 
-Skelzies includes **no** third-party software development kits, frameworks,
+Skelz includes **no** third-party software development kits, frameworks,
 libraries, analytics providers, advertising networks, or social media
 integrations. Every graphic in the game is drawn in code by the App itself. The
 only software components used are Apple's own operating system frameworks
@@ -55,13 +55,13 @@ only software components used are Apple's own operating system frameworks
 
 ## 5. Tracking
 
-Skelzies does not track you. The App does not link any data to your identity and
+Skelz does not track you. The App does not link any data to your identity and
 does not follow you across other companies' apps or websites. Because no tracking
 occurs, the App does not present Apple's App Tracking Transparency prompt.
 
 ## 6. Apple's Role
 
-Skelzies is distributed through the Apple App Store. Apple may independently
+Skelz is distributed through the Apple App Store. Apple may independently
 collect certain information related to your download and use of the App — such as
 purchase records, or crash diagnostics if you have opted into sharing them with
 developers. That data is handled by Apple under
@@ -71,7 +71,7 @@ individual user.
 
 ## 7. Children's Privacy
 
-Skelzies is a family-friendly game suitable for all ages. Because the App collects
+Skelz is a family-friendly game suitable for all ages. Because the App collects
 no personal information whatsoever, it collects none from children. We comply with
 the Children's Online Privacy Protection Act (COPPA) by design: there is nothing
 to collect, no way to contact other users, no user-generated content shared
@@ -103,12 +103,11 @@ versions remain visible in this repository's commit history.
 
 Questions about this policy or the App's privacy practices:
 
-**Email:** senriv.esq@gmail.com
-**Developer:** Anthony Rivera
-**App:** Skelzies (bundle identifier `com.MirrorAI.Skelzies`)
+**Email:** yourmirror.ai@gmail.com
+**App:** Skelz (bundle identifier `com.MirrorAI.Skelz`)
 
 ---
 
-*This policy applies to the Skelzies iPad application distributed on the Apple App
+*This policy applies to the Skelz iPad application distributed on the Apple App
 Store. Web version of this document:
-<https://nomoredataharvesting.github.io/Skelzies/>*
+<https://nomoredataharvesting.github.io/Skelz/>*
