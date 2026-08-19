@@ -21,7 +21,7 @@ struct SkelziesApp: App {
         WindowGroup {
             ContentView()
                 .preferredColorScheme(.dark)
-                .onAppear(perform: Self.enforceLandscape)
+                .onAppear { Self.enforceLandscape() }
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active { Self.enforceLandscape() }
@@ -31,6 +31,13 @@ struct SkelziesApp: App {
     /// Landscape-only enforcement, layer 2: actively rotate any scene that
     /// came up in portrait (e.g. cold boot with the iPad held vertically)
     /// into landscape, and re-assert whenever the app returns to foreground.
+    ///
+    /// Explicitly main-actor isolated: it touches UIApplication.shared and the
+    /// window scene, so it must not be called from anywhere else. Call it from
+    /// inside a closure rather than passing it as a function reference — a
+    /// reference would have to cross into a nonisolated context to satisfy
+    /// onAppear(perform:), which is what the compiler warns about.
+    @MainActor
     static func enforceLandscape() {
         for scene in UIApplication.shared.connectedScenes {
             guard let windowScene = scene as? UIWindowScene else { continue }

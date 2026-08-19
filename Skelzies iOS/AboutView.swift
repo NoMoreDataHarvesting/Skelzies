@@ -23,9 +23,13 @@ struct AboutView: View {
     /// Set to false if the app is NOT listed in the Kids Category.
     private let requiresParentalGate = true
 
-    // Update these before shipping.
-    private let privacyPolicyURL = URL(string: "https://YOUR-USERNAME.github.io/skelzies-privacy/")!
-    private let supportEmail     = "YOUR-EMAIL@example.com"
+    private let privacyPolicyURL = URL(string: "https://nomoredataharvesting.github.io/Skelzies/")
+    private let supportEmail     = "yourmirror.ai@gmail.com"
+
+    /// The App Store numeric ID, found in App Store Connect under
+    /// App Information → General Information → Apple ID. Until it is set, the
+    /// "Rate on the App Store" row stays hidden rather than opening a dead link.
+    private let appStoreID: String? = nil
 
     private var appVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
@@ -74,7 +78,7 @@ struct AboutView: View {
                         linkRow(icon: "hand.raised.fill",
                                 label: "Privacy Policy",
                                 subtext: "We collect nothing. Really.") {
-                            openExternal(privacyPolicyURL)
+                            if let privacyPolicyURL { openExternal(privacyPolicyURL) }
                         }
                         linkRow(icon: "envelope.fill",
                                 label: "Support",
@@ -83,11 +87,13 @@ struct AboutView: View {
                                 openExternal(url)
                             }
                         }
-                        linkRow(icon: "star.fill",
-                                label: "Rate on the App Store",
-                                subtext: "One tap. Makes our whole week.") {
-                            // Replace APP_ID after your app is live in App Store Connect.
-                            if let url = URL(string: "itms-apps://itunes.apple.com/app/idAPP_ID?action=write-review") {
+                        // Shown only once appStoreID is filled in, so the app can
+                        // never ship a review link that goes nowhere.
+                        if let appStoreID,
+                           let url = URL(string: "itms-apps://itunes.apple.com/app/id\(appStoreID)?action=write-review") {
+                            linkRow(icon: "star.fill",
+                                    label: "Rate on the App Store",
+                                    subtext: "One tap. Makes our whole week.") {
                                 openExternal(url)
                             }
                         }
@@ -95,7 +101,7 @@ struct AboutView: View {
 
                     // MARK: Credits
                     section(title: "CREDITS") {
-                        creditRow(role: "Design & Code", name: "[YOUR NAME]")
+                        creditRow(role: "Design & Code", name: "MirrorAI")
                         creditRow(role: "Playtesting",   name: "The block")
                         creditRow(role: "Inspired by",   name: "NYC · Skully · Loadies · Tops")
                     }
@@ -113,7 +119,7 @@ struct AboutView: View {
                     .padding(.top, 4)
 
                     // MARK: Legal
-                    Text("© \(currentYear()) [YOUR NAME OR STUDIO]. All rights reserved.")
+                    Text("© \(currentYear()) MirrorAI. All rights reserved.")
                         .font(.system(size: 11, design: .monospaced))
                         .kerning(1)
                         .foregroundColor(.gray.opacity(0.7))

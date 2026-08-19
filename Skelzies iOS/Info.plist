@@ -7,5 +7,10 @@
 		<key>UIColorName</key>
 		<string>Black</string>
 	</dict>
+	<!-- Export compliance: the app contains no encryption of any kind — no
+	     networking, no CryptoKit/CommonCrypto, no Keychain. Declaring this here
+	     stops App Store Connect from asking on every upload. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 </dict>
 </plist>
