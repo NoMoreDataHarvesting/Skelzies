@@ -104,10 +104,10 @@ versions remain visible in this repository's commit history.
 Questions about this policy or the App's privacy practices:
 
 **Email:** yourmirror.ai@gmail.com
-**App:** Skelz (bundle identifier `com.MirrorAI.Skelz`)
+**App:** Skelz for iPad
 
 ---
 
 *This policy applies to the Skelz iPad application distributed on the Apple App
 Store. Web version of this document:
-<https://nomoredataharvesting.github.io/Skelz/>*
+<https://nomoredataharvesting.github.io/Skelzies/>*
